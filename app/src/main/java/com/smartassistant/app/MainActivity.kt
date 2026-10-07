@@ -11,9 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,22 +80,24 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
   alwaysShowLabel=true
 )}
 
-@Composable fun Home(db:AppDb,go:(String)->Unit){
+@Composable
+fun Home(db:AppDb,go:(String)->Unit){
  val cs=db.customers();val ps=db.products();val asx=db.appointments()
  BoxWithConstraints(Modifier.fillMaxSize()){
   val width=maxWidth
-  val horizontal=if(width<360.dp)12.dp else if(width<600.dp)16.dp else 24.dp
+  val horizontal=when{width<360.dp->12.dp;width<600.dp->16.dp;else->24.dp}
   val columns=when{width<420.dp->2;width<720.dp->3;else->4}
   LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(start=horizontal,end=horizontal,top=16.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    item{
-    Text("المساعد الذكي",fontSize=if(width<360.dp)23.sp else 26.sp,fontWeight=FontWeight.Bold,color=Ink)
+    Text("المساعد الذكي",fontSize=if(width<360.dp)23.sp else if(width<600.dp)26.sp else 28.sp,fontWeight=FontWeight.Bold,color=Ink)
     Text("لوحة التحكم",fontSize=14.sp,color=Color.Gray)
    }
    item{
     Surface(Modifier.fillMaxWidth().clickable{go("assistant")},RoundedCornerShape(20.dp),color=Blue){
      Row(Modifier.padding(if(width<360.dp)14.dp else 18.dp),verticalAlignment=Alignment.CenterVertically){
       Icon(Icons.Default.AutoAwesome,null,tint=Color.White,modifier=Modifier.size(if(width<360.dp)32.dp else 38.dp))
-      Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){
+      Spacer(Modifier.width(10.dp))
+      Column(Modifier.weight(1f)){
        Text("كيف أساعدك اليوم؟",fontSize=18.sp,fontWeight=FontWeight.Bold,color=Color.White,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
        Text("اسأل عن العملاء والمواعيد والمخزون.",fontSize=13.sp,color=Color.White,maxLines=2,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
       }
@@ -106,19 +105,41 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
     }
    }
    item{
-    LazyVerticalGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxWidth().height(if(columns==2)150.dp else 104.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp),userScrollEnabled=false){
-     item{Stat("العملاء",cs.size,Icons.Default.People,Blue)}
-     item{Stat("المواعيد",asx.size,Icons.Default.EventNote,Teal)}
-     item{Stat("الأصناف",ps.size,Icons.Default.Inventory2,Color(0xFF7A55D8))}
-     item{Stat("بأرصدة",cs.count{it.balance!=0.0},Icons.Default.AccountBalanceWallet,Color(0xFFE88A18))}
+    val stats=listOf(
+     Triple("العملاء",cs.size to Icons.Default.People,Blue),
+     Triple("المواعيد",asx.size to Icons.Default.EventNote,Teal),
+     Triple("الأصناف",ps.size to Icons.Default.Inventory2,Color(0xFF7A55D8)),
+     Triple("بأرصدة",cs.count{it.balance!=0.0} to Icons.Default.AccountBalanceWallet,Color(0xFFE88A18))
+    )
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+     stats.chunked(columns).forEach{row->
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+       row.forEach{itemData->
+        Stat(itemData.first,itemData.second.first,itemData.second.second,itemData.third,Modifier.weight(1f))
+       }
+       repeat(columns-row.size){Spacer(Modifier.weight(1f))}
+      }
+     }
     }
    }
    item{Text("الوصول السريع",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Ink)}
    item{
-    val cards=listOf("customers" to ("العملاء والأرصدة" to Icons.Default.People),"alerts" to ("الاستحقاقات" to Icons.Default.EventNote),"inventory" to ("المخزون" to Icons.Default.Inventory2),"reports" to ("التقارير" to Icons.Default.Assessment),"messages" to ("الرسائل" to Icons.Default.Message))
-    val rows=(cards.size+columns-1)/columns
-    LazyVerticalGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxWidth().height((rows*100).dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp),userScrollEnabled=false){
-     gridItems(cards){itemData->Quick(itemData.second.first,itemData.second.second){go(itemData.first)}}
+    val cards=listOf(
+     "customers" to ("العملاء والأرصدة" to Icons.Default.People),
+     "alerts" to ("الاستحقاقات" to Icons.Default.EventNote),
+     "inventory" to ("المخزون" to Icons.Default.Inventory2),
+     "reports" to ("التقارير" to Icons.Default.Assessment),
+     "messages" to ("الرسائل" to Icons.Default.Message)
+    )
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+     cards.chunked(columns).forEach{row->
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+       row.forEach{itemData->
+        Quick(itemData.second.first,itemData.second.second,Modifier.weight(1f)){go(itemData.first)}
+       }
+       repeat(columns-row.size){Spacer(Modifier.weight(1f))}
+      }
+     }
     }
    }
   }
@@ -127,13 +148,13 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
 @Composable fun Stat(t:String,n:Int,i:ImageVector,c:Color,modifier:Modifier=Modifier)=Surface(modifier.fillMaxWidth().heightIn(min=72.dp),RoundedCornerShape(14.dp),color=Color.White){Row(Modifier.fillMaxSize().padding(10.dp),verticalAlignment=Alignment.CenterVertically){Icon(i,null,tint=c,modifier=Modifier.size(24.dp));Spacer(Modifier.width(7.dp));Column(Modifier.weight(1f)){Text(n.toString(),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1);Text(t,fontSize=11.sp,color=Color.Gray,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)}}}
 @Composable fun Quick(t:String,i:ImageVector,modifier:Modifier=Modifier,on:()->Unit)=Surface(modifier.fillMaxWidth().heightIn(min=88.dp).clickable(onClick=on),RoundedCornerShape(14.dp),color=Color.White){Column(Modifier.fillMaxSize().padding(12.dp),verticalArrangement=Arrangement.Center){Icon(i,null,tint=Blue);Spacer(Modifier.height(7.dp));Text(t,fontSize=14.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=2,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)}}
 
-@Composable fun Customers(db:AppDb){var q by remember{mutableStateOf("")};var add by remember{mutableStateOf(false)};val list=db.customers().filter{it.name.contains(q,true)||it.phone.contains(q)};Page("العملاء والأرصدة",Icons.Default.People){Outlined("بحث",q){q=it};Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة عميل")};LazyColumn{items(list){c->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(c.name,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text(c.phone.ifBlank{"بدون رقم"},fontSize=12.sp,color=Color.Gray);Text("الرصيد: ${fmt(c.balance)} ${c.currency}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=Blue)}}}}};if(add)CustomerDialog(db){add=false}}
-@Composable fun CustomerDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var p by remember{mutableStateOf("")};var b by remember{mutableStateOf("")};var c by remember{mutableStateOf("ر.ي")};AlertDialog(onDismissRequest=done,title={Text("إضافة عميل")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("الاسم",n){n=it};Outlined("الهاتف",p){p=it};Outlined("الرصيد",b){b=it};Outlined("العملة",c){c=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveCustomer(n,p,b.toDoubleOrNull()?:0.0,c);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
+@Composable fun Customers(db:AppDb){var q by remember{mutableStateOf("")};var add by remember{mutableStateOf(false)};val list=db.customers().filter{it.name.contains(q,true)||it.phone.contains(q)};Page("العملاء والأرصدة",Icons.Default.People){Outlined("بحث",q){q=it};Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة عميل")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){c->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(c.name,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text(c.phone.ifBlank{"بدون رقم"},fontSize=12.sp,color=Color.Gray);Text("الرصيد: ${fmt(c.balance)} ${c.currency}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=Blue)}}}}};if(add)CustomerDialog(db){add=false}}
+@Composable fun CustomerDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var p by remember{mutableStateOf("")};var b by remember{mutableStateOf("")};var c by remember{mutableStateOf("ر.ي")};AlertDialog(onDismissRequest=done,title={Text("إضافة عميل")},text={Column(Modifier.fillMaxWidth().heightIn(max=420.dp).verticalScroll(rememberScrollState())){Outlined("الاسم",n){n=it};Outlined("الهاتف",p){p=it};Outlined("الرصيد",b){b=it};Outlined("العملة",c){c=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveCustomer(n,p,b.toDoubleOrNull()?:0.0,c);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
 
-@Composable fun Inventory(db:AppDb){var add by remember{mutableStateOf(false)};val list=db.products();Page("المخزون",Icons.Default.Inventory2){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة صنف")};LazyColumn{items(list){p->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(14.dp)){Column(Modifier.weight(1f)){Text(p.name,fontSize=15.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${p.category} • ${p.warehouse}",fontSize=12.sp,color=Color.Gray)};Text("${fmt(p.qty)} ${p.unit}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=if(p.qty<=0)Color.Red else Teal)}}}}};if(add)ProductDialog(db){add=false}}
+@Composable fun Inventory(db:AppDb){var add by remember{mutableStateOf(false)};val list=db.products();Page("المخزون",Icons.Default.Inventory2){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة صنف")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){p->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(14.dp)){Column(Modifier.weight(1f)){Text(p.name,fontSize=15.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${p.category} • ${p.warehouse}",fontSize=12.sp,color=Color.Gray)};Text("${fmt(p.qty)} ${p.unit}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=if(p.qty<=0)Color.Red else Teal)}}}}};if(add)ProductDialog(db){add=false}}
 @Composable fun ProductDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var q by remember{mutableStateOf("")};var u by remember{mutableStateOf("حبة")};var w by remember{mutableStateOf("الرئيسي")};var cat by remember{mutableStateOf("عام")};AlertDialog(onDismissRequest=done,title={Text("إضافة صنف")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("اسم الصنف",n){n=it};Outlined("الكمية",q){q=it};Outlined("الوحدة",u){u=it};Outlined("المخزن",w){w=it};Outlined("الفئة",cat){cat=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveProduct(n,q.toDoubleOrNull()?:0.0,u,w,cat);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
 
-@Composable fun Appointments(db:AppDb){var add by remember{mutableStateOf(false)};val cs=db.customers();val list=db.appointments();Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")};LazyColumn{items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${a.date} • ${a.time}",fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)}}}}};if(add)AppointmentDialog(db,cs){add=false}}
+@Composable fun Appointments(db:AppDb){var add by remember{mutableStateOf(false)};val cs=db.customers();val list=db.appointments();Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${a.date} • ${a.time}",fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)}}}}};if(add)AppointmentDialog(db,cs){add=false}}
 @Composable fun AppointmentDialog(db:AppDb,cs:List<Customer>,done:()->Unit){var cid by remember{mutableStateOf(cs.firstOrNull()?.id?:0)};var d by remember{mutableStateOf("")};var t by remember{mutableStateOf("")};var r by remember{mutableStateOf("")};AlertDialog(onDismissRequest=done,title={Text("موعد جديد")},text={Column(Modifier.verticalScroll(rememberScrollState())){if(cs.isEmpty())Text("أضف عميلًا أولًا.");else{Outlined("رقم العميل",cid.toString()){cid=it.toLongOrNull()?:cid};Outlined("التاريخ",d){d=it};Outlined("الوقت",t){t=it};Outlined("سبب الموعد",r){r=it}}}},confirmButton={Button(onClick={if(cid>0&&d.isNotBlank()){db.saveAppointment(cid,d,t,r);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
 
 @Composable fun Reports(db:AppDb){val c=db.customers();val p=db.products();val a=db.appointments();Page("التقارير",Icons.Default.Assessment){R("إجمالي العملاء",c.size.toString());R("العملاء ذوو الأرصدة",c.count{it.balance!=0.0}.toString());R("إجمالي الأرصدة",fmt(c.sumOf{it.balance}));R("المواعيد",a.size.toString());R("الأصناف منخفضة المخزون",p.count{it.qty<=5}.toString())}}
@@ -153,7 +174,7 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
    Icon(icon,null,tint=Blue);Spacer(Modifier.width(10.dp))
    Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
   }
-  Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxSize(),content=content)
+  Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxWidth().weight(1f),content=content)
  }
 }
 @Composable fun Outlined(label:String,v:String,on:(String)->Unit)=OutlinedTextField(v,on,label={Text(label)},modifier=Modifier.fillMaxWidth().padding(vertical=3.dp),singleLine=true)
