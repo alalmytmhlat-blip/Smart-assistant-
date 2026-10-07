@@ -74,11 +74,10 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
   else->Home(db){tab=it}
  }}}
 }
-@Composable fun Nav(id:String,l:String,i:ImageVector,s:String,on:()->Unit){
- NavigationBarItem(selected=s==id,onClick=on,icon={Icon(i,contentDescription=l)},
-  label={Text(l,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,fontSize=10.sp)},
-  alwaysShowLabel=true
-)}
+@Composable fun Nav(id:String,l:String,i:ImageVector,s:String,on:()->Unit)=TextButton(onClick=on,modifier=Modifier.weight(1f)){Column(horizontalAlignment=Alignment.CenterHorizontally){
+ Icon(i,contentDescription=l,tint=if(s==id)Blue else Color.Gray,modifier=Modifier.size(24.dp))
+ Text(l,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,fontSize=10.sp,color=if(s==id)Blue else Color.Gray)
+}}
 
 @Composable
 fun Home(db:AppDb,go:(String)->Unit){
