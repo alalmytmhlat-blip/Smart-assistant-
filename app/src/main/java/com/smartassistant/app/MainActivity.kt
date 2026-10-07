@@ -145,6 +145,16 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
 
 @Composable fun Settings(db:AppDb){var n by remember{mutableStateOf(db.setting("name"))};var ph by remember{mutableStateOf(db.setting("phone"))};var ok by remember{mutableStateOf(false)};Page("الإعدادات",Icons.Default.Settings){Outlined("اسم المنشأة",n){n=it};Outlined("الهاتف",ph){ph=it};Button(onClick={db.saveSetting("name",n);db.saveSetting("phone",ph);ok=true},modifier=Modifier.fillMaxWidth()){Text("حفظ")};if(ok)Text("تم حفظ الإعدادات.",color=Teal);Spacer(Modifier.height(16.dp));Text("البيانات محفوظة محليًا على الجهاز.",fontSize=12.sp,color=Color.Gray)}}
 
-@Composable fun Page(title:String,icon:ImageVector,content:@Composable ColumnScope.()->Unit){BoxWithConstraints(Modifier.fillMaxSize()){val pad=if(maxWidth<360.dp)12.dp else if(maxWidth<600.dp)18.dp else 24.dp;Column(Modifier.fillMaxSize().padding(horizontal=pad,vertical=14.dp)){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Icon(icon,null,tint=Blue);Spacer(Modifier.width(10.dp));Text(title,fontSize=if(maxWidth<360.dp)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.weight(1f))};Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxSize(),content=content)}}}
+@Composable fun Page(title:String,icon:ImageVector,content:@Composable ColumnScope.()->Unit){
+ val screenWidth=android.content.res.Resources.getSystem().displayMetrics.widthPixels
+ val pad=when{screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT->12.dp;screenWidth<600*android.util.DisplayMetrics.DENSITY_DEFAULT->18.dp;else->24.dp}
+ Column(Modifier.fillMaxSize().padding(horizontal=pad,vertical=14.dp)){
+  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+   Icon(icon,null,tint=Blue);Spacer(Modifier.width(10.dp))
+   Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
+  }
+  Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxSize(),content=content)
+ }
+}
 @Composable fun Outlined(label:String,v:String,on:(String)->Unit)=OutlinedTextField(v,on,label={Text(label)},modifier=Modifier.fillMaxWidth().padding(vertical=3.dp),singleLine=true)
 fun fmt(v:Double)=String.format(Locale.US,"%,.0f",v)
