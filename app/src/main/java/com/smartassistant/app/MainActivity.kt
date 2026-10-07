@@ -79,13 +79,17 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
 }
 @Composable fun Nav(id:String,l:String,i:ImageVector,s:String,on:()->Unit){
  NavigationBarItem(selected=s==id,onClick=on,icon={Icon(i,contentDescription=l)},
-  label={Text(l,maxLines=1,overflow=android@Composable fun Home(db:AppDb,go:(String)->Unit){
+  label={Text(l,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,fontSize=10.sp)},
+  alwaysShowLabel=true
+)}
+
+@Composable fun Home(db:AppDb,go:(String)->Unit){
  val cs=db.customers();val ps=db.products();val asx=db.appointments()
  BoxWithConstraints(Modifier.fillMaxSize()){
   val width=maxWidth
   val horizontal=if(width<360.dp)12.dp else if(width<600.dp)16.dp else 24.dp
   val columns=when{width<420.dp->2;width<720.dp->3;else->4}
-  LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(horizontal,horizontal,top=16.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(start=horizontal,end=horizontal,top=16.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    item{
     Text("المساعد الذكي",fontSize=if(width<360.dp)23.sp else 26.sp,fontWeight=FontWeight.Bold,color=Ink)
     Text("لوحة التحكم",fontSize=14.sp,color=Color.Gray)
@@ -114,13 +118,10 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
     val cards=listOf("customers" to ("العملاء والأرصدة" to Icons.Default.People),"alerts" to ("الاستحقاقات" to Icons.Default.EventNote),"inventory" to ("المخزون" to Icons.Default.Inventory2),"reports" to ("التقارير" to Icons.Default.Assessment),"messages" to ("الرسائل" to Icons.Default.Message))
     val rows=(cards.size+columns-1)/columns
     LazyVerticalGrid(columns=GridCells.Fixed(columns),modifier=Modifier.fillMaxWidth().height((rows*100).dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp),userScrollEnabled=false){
-     gridItems(cards){(id,x)->Quick(x.first,x.second){go(id)}}
+     gridItems(cards){itemData->Quick(itemData.second.first,itemData.second.second){go(itemData.first)}}
     }
    }
   }
- }
-}
->Quick(x.first,x.second,Modifier.weight(1f)){go(id)}}};Spacer(Modifier.height(8.dp))}
  }
 }
 @Composable fun Stat(t:String,n:Int,i:ImageVector,c:Color,modifier:Modifier=Modifier)=Surface(modifier.fillMaxWidth().heightIn(min=72.dp),RoundedCornerShape(14.dp),color=Color.White){Row(Modifier.fillMaxSize().padding(10.dp),verticalAlignment=Alignment.CenterVertically){Icon(i,null,tint=c,modifier=Modifier.size(24.dp));Spacer(Modifier.width(7.dp));Column(Modifier.weight(1f)){Text(n.toString(),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1);Text(t,fontSize=11.sp,color=Color.Gray,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)}}}
