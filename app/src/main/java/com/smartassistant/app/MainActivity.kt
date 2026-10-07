@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,15 +69,15 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
  Column(Modifier.fillMaxSize().padding(18.dp)){
   Text("المساعد الذكي",fontSize=26.sp,fontWeight=FontWeight.Bold,color=Ink);Text("لوحة التحكم",fontSize=14.sp,color=Color.Gray);Spacer(Modifier.height(14.dp))
   Surface(Modifier.fillMaxWidth().clickable{go("assistant")},RoundedCornerShape(20.dp),color=Blue){Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AutoAwesome,null,tint=Color.White,modifier=Modifier.size(38.dp));Spacer(Modifier.width(12.dp));Column{Text("كيف أساعدك اليوم؟",fontSize=18.sp,fontWeight=FontWeight.Bold,color=Color.White);Text("اسأل عن العملاء والمواعيد والمخزون.",fontSize=13.sp,color=Color.White)}}}
-  Spacer(Modifier.height(14.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Stat("العملاء",cs.size,Icons.Default.People,Blue);Stat("المواعيد",asx.size,Icons.Default.EventNote,Teal)}
-  Spacer(Modifier.height(8.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Stat("الأصناف",ps.size,Icons.Default.Inventory2,Color(0xFF7A55D8));Stat("بأرصدة",cs.count{it.balance!=0.0},Icons.Default.AccountBalanceWallet,Color(0xFFE88A18))}
+  Spacer(Modifier.height(14.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Stat("العملاء",cs.size,Icons.Default.People,Blue,Modifier.weight(1f));Stat("المواعيد",asx.size,Icons.Default.EventNote,Teal,Modifier.weight(1f))}
+  Spacer(Modifier.height(8.dp));Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Stat("الأصناف",ps.size,Icons.Default.Inventory2,Color(0xFF7A55D8),Modifier.weight(1f));Stat("بأرصدة",cs.count{it.balance!=0.0},Icons.Default.AccountBalanceWallet,Color(0xFFE88A18),Modifier.weight(1f))}
   Spacer(Modifier.height(18.dp));Text("الوصول السريع",fontSize=19.sp,fontWeight=FontWeight.Bold,color=Ink);Spacer(Modifier.height(8.dp))
   val cards=listOf("customers" to ("العملاء والأرصدة" to Icons.Default.People),"alerts" to ("الاستحقاقات" to Icons.Default.EventNote),"inventory" to ("المخزون" to Icons.Default.Inventory2),"reports" to ("التقارير" to Icons.Default.Assessment),"messages" to ("الرسائل" to Icons.Default.Message))
-  cards.chunked(2).forEach{row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){row.forEach{(id,x)->Quick(x.first,x.second){go(id)}}};Spacer(Modifier.height(8.dp))}
+  cards.chunked(2).forEach{row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){row.forEach{(id,x)->Quick(x.first,x.second,Modifier.weight(1f)){go(id)}}};Spacer(Modifier.height(8.dp))}
  }
 }
-@Composable fun Stat(t:String,n:Int,i:ImageVector,c:Color)=Surface(Modifier.weight(1f),RoundedCornerShape(14.dp),color=Color.White){Row(Modifier.padding(13.dp),verticalAlignment=Alignment.CenterVertically){Icon(i,null,tint=c);Spacer(Modifier.width(8.dp));Column{Text(n.toString(),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink);Text(t,fontSize=11.sp,color=Color.Gray)}}}
-@Composable fun Quick(t:String,i:ImageVector,on:()->Unit)=Surface(Modifier.weight(1f).height(92.dp).clickable(onClick=on),RoundedCornerShape(14.dp),color=Color.White){Column(Modifier.padding(13.dp)){Icon(i,null,tint=Blue);Spacer(Modifier.height(8.dp));Text(t,fontSize=14.sp,fontWeight=FontWeight.Bold,color=Ink)}}
+@Composable fun Stat(t:String,n:Int,i:ImageVector,c:Color,modifier:Modifier=Modifier)=Surface(modifier,RoundedCornerShape(14.dp),color=Color.White){Row(Modifier.padding(13.dp),verticalAlignment=Alignment.CenterVertically){Icon(i,null,tint=c);Spacer(Modifier.width(8.dp));Column{Text(n.toString(),fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink);Text(t,fontSize=11.sp,color=Color.Gray)}}}
+@Composable fun Quick(t:String,i:ImageVector,modifier:Modifier=Modifier,on:()->Unit)=Surface(modifier.height(92.dp).clickable(onClick=on),RoundedCornerShape(14.dp),color=Color.White){Column(Modifier.padding(13.dp)){Icon(i,null,tint=Blue);Spacer(Modifier.height(8.dp));Text(t,fontSize=14.sp,fontWeight=FontWeight.Bold,color=Ink)}}
 
 @Composable fun Customers(db:AppDb){var q by remember{mutableStateOf("")};var add by remember{mutableStateOf(false)};val list=db.customers().filter{it.name.contains(q,true)||it.phone.contains(q)};Page("العملاء والأرصدة",Icons.Default.People){Outlined("بحث",q){q=it};Button({add=true},Modifier.fillMaxWidth()){Text("إضافة عميل")};LazyColumn{items(list){c->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(c.name,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text(c.phone.ifBlank{"بدون رقم"},fontSize=12.sp,color=Color.Gray);Text("الرصيد: ${fmt(c.balance)} ${c.currency}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=Blue)}}}}};if(add)CustomerDialog(db){add=false}}
 @Composable fun CustomerDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var p by remember{mutableStateOf("")};var b by remember{mutableStateOf("")};var c by remember{mutableStateOf("ر.ي")};AlertDialog(onDismissRequest=done,title={Text("إضافة عميل")},text={Column{Outlined("الاسم",n){n=it};Outlined("الهاتف",p){p=it};Outlined("الرصيد",b){b=it};Outlined("العملة",c){c=it}}},confirmButton={Button({if(n.isNotBlank()){db.saveCustomer(n,p,b.toDoubleOrNull()?:0.0,c);done()}}){Text("حفظ")}},dismissButton={TextButton(done){Text("إلغاء")}})}
