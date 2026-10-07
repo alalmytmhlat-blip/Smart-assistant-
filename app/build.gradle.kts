@@ -5,6 +5,9 @@ plugins {
 }
 
 android {
+    buildFeatures {
+        compose = true
+    }
     namespace = "com.smartassistant.app"
     compileSdk = 35
 
