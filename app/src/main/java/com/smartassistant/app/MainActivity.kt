@@ -173,7 +173,7 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
  Column(Modifier.fillMaxSize().padding(horizontal=pad,vertical=14.dp)){
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
    Icon(icon,null,tint=Blue);Spacer(Modifier.width(10.dp))
-   Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
+   Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.fillMaxHeight())
   }
   Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxWidth().weight(1f),content=content)
  }
