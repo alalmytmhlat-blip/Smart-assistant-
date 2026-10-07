@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +61,7 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
  var tab by remember{mutableStateOf("home")}
  Scaffold(containerColor=Page,bottomBar={NavigationBar{Nav("home","الرئيسية",Icons.Default.Home,tab){tab="home"};Nav("assistant","المساعد",Icons.Default.AutoAwesome,tab){tab="assistant"};Nav("alerts","التنبيهات",Icons.Default.Notifications,tab){tab="alerts"};Nav("settings","الإعدادات",Icons.Default.Settings,tab){tab="settings"}}}){p->Box(Modifier.fillMaxSize().padding(p)){when(tab){"home"->Home(db){tab=it};"assistant"->Assistant(db);"alerts"->Appointments(db);"settings"->Settings(db);"customers"->Customers(db);"inventory"->Inventory(db);"reports"->Reports(db);"messages"->Messages();else->Home(db){tab=it}}}}
 }
-@Composable fun Nav(id:String,l:String,i:ImageVector,s:String,on:()->Unit)=NavigationBarItem(s==id,on,{Icon(i,null)},label={Text(l)})
+@Composable fun Nav(id:String,l:String,i:ImageVector,s:String,on:()->Unit)=TextButton(onClick=on){Column(horizontalAlignment=Alignment.CenterHorizontally){Icon(i,null,tint=if(s==id)Blue else Color.Gray);Text(l,fontSize=11.sp,color=if(s==id)Blue else Color.Gray)}}
 
 @Composable fun Home(db:AppDb,go:(String)->Unit){
  val cs=db.customers();val ps=db.products();val asx=db.appointments()
