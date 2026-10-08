@@ -333,6 +333,9 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
 fun fmt(v:Double)=String.format(Locale.US,"%,.0f",v)
 
 
+fun scheduleAllReminders(context:Context,db:AppDb){
+ db.appointments().forEach{a->scheduleReminder(context,a.id,a.customer,a.date,a.time)}
+}
 fun scheduleReminder(context:Context,id:Long,customer:String,date:String,time:String){
  if(id<=0L)return
  val at=runCatching{SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).parse(date+" "+time)!!.time}.getOrNull()?:return
