@@ -105,6 +105,7 @@ class MainActivity:ComponentActivity(){
   super.onCreate(b)
   PDFBoxResourceLoader.init(applicationContext)
   setContent{App(AppDb(this))}
+  if(Build.VERSION.SDK_INT>=33)requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"),7001)
  }
 }
 class ReminderReceiver:android.content.BroadcastReceiver(){
