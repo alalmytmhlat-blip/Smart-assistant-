@@ -107,6 +107,11 @@ class MainActivity:ComponentActivity(){
   if(Build.VERSION.SDK_INT>=33)requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"),7001)
  }
 }
+class BootReceiver:android.content.BroadcastReceiver(){
+ override fun onReceive(context:Context,intent:Intent){
+  if(intent.action==Intent.ACTION_BOOT_COMPLETED) scheduleAllReminders(context,AppDb(context))
+ }
+}
 class ReminderReceiver:android.content.BroadcastReceiver(){
  override fun onReceive(context:Context,intent:Intent){
   val nm=context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
