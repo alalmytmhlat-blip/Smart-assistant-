@@ -13,6 +13,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import org.json.JSONArray
 import org.json.JSONObject
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import java.io.File
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -95,7 +99,22 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  fun saveSetting(k:String,v:String){val x=ContentValues();x.put("key",k);x.put("value",v);writableDatabase.insertWithOnConflict("settings",null,x,SQLiteDatabase.CONFLICT_REPLACE)}
  fun audits():List<String>{val r=mutableListOf<String>();readableDatabase.rawQuery("SELECT date,action,details FROM audit ORDER BY id DESC LIMIT 50",null).use{c->while(c.moveToNext())r+=c.getString(0)+" • "+c.getString(1)+" • "+c.getString(2)};return r}
 }
-class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.onCreate(b);setContent{App(AppDb(this))}}}
+class MainActivity:ComponentActivity(){
+ override fun onCreate(b:Bundle?){
+  super.onCreate(b)
+  PDFBoxResourceLoader.init(applicationContext)
+  setContent{App(AppDb(this))}
+ }
+}
+class ReminderReceiver:android.content.BroadcastReceiver(){
+ override fun onReceive(context:Context,intent:Intent){
+  val nm=context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+  val channel="appointments"
+  if(Build.VERSION.SDK_INT>=26)nm.createNotificationChannel(android.app.NotificationChannel(channel,"تذكيرات المواعيد",android.app.NotificationManager.IMPORTANCE_HIGH))
+  val customer=intent.getStringExtra("customer")?:"العميل"
+  val n=androidx.core.app.NotificationCompat.Builder(context,channel).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("تذكير بالموعد").setContentText("موعد "+customer+" حان الآن").setAutoCancel(true).build()
+  nm.notify(intent.getLongExtra("id",1).toInt(),n)
+}
 
 @Composable fun App(db:AppDb){
  MaterialTheme(colorScheme=lightColorScheme(primary=Blue,secondary=Teal,background=Page,surface=Color.White,onSurface=Ink)){
