@@ -90,7 +90,7 @@ fun Home(db:AppDb,go:(String)->Unit){
   val columns=when{width<420.dp->2;width<720.dp->3;else->4}
   LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(start=horizontal,end=horizontal,top=16.dp,bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    item{
-    Text("المساعد الذكي",fontSize=if(width<360.dp)23.sp else if(width<600.dp)26.sp else 28.sp,fontWeight=FontWeight.Bold,color=Ink)
+    Text("المساعد الذكي",fontSize=if(width<360.dp)23.sp else if(width<600.dp)26.sp else 28.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     Text("لوحة التحكم",fontSize=14.sp,color=Color.Gray)
    }
    item{
@@ -173,7 +173,7 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
  Column(Modifier.fillMaxSize().padding(horizontal=pad,vertical=14.dp)){
   Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
    Icon(icon,null,tint=Blue);Spacer(Modifier.width(10.dp))
-   Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.fillMaxHeight())
+   Text(title,fontSize=if(screenWidth<360*android.util.DisplayMetrics.DENSITY_DEFAULT)20.sp else 24.sp,fontWeight=FontWeight.Bold,color=Ink,maxLines=1,overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
   }
   Spacer(Modifier.height(12.dp));Column(Modifier.fillMaxWidth().weight(1f),content=content)
  }
