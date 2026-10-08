@@ -76,7 +76,8 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  fun updateAppointmentStatus(id:Long,status:String){val v=ContentValues();v.put("status",status);writableDatabase.update("appointments",v,"id=?",arrayOf(id.toString()));audit("تغيير حالة موعد",status)}
  fun products():List<Product>{val r=mutableListOf<Product>();readableDatabase.rawQuery("SELECT id,name,qty,unit,warehouse,category FROM products ORDER BY name",null).use{c->while(c.moveToNext())r+=Product(c.getLong(0),c.getString(1),c.getDouble(2),c.getString(3)?:"حبة",c.getString(4)?:"الرئيسي",c.getString(5)?:"عام")};return r}
  fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v);audit("إضافة صنف",n)}
- fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
+ fun updateProduct(id:Long,n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.update("products",v,"id=?",arrayOf(id.toString()));audit("تعديل صنف",n)}
+fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
  fun setting(k:String)=readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?",arrayOf(k)).use{if(it.moveToFirst())it.getString(0) else ""}
  fun backupJson():String{
   val root=JSONObject()
@@ -231,8 +232,22 @@ fun Home(db:AppDb,go:(String)->Unit){
  AlertDialog(onDismissRequest=done,title={Text(if(initial==null)"إضافة عميل" else "تعديل عميل")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("الاسم",n){n=it};Outlined("الهاتف",p){p=it};Outlined("الرصيد",b){b=it};Outlined("العملة",c){c=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveCustomer(initial?.id,n,p,b.toDoubleOrNull()?:0.0,c);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})
 }
 
-@Composable fun Inventory(db:AppDb){var add by remember{mutableStateOf(false)};val list=db.products();Page("المخزون",Icons.Default.Inventory2){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة صنف")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){p->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(14.dp)){Column(Modifier.weight(1f)){Text(p.name,fontSize=15.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${p.category} • ${p.warehouse}",fontSize=12.sp,color=Color.Gray)};Text("${fmt(p.qty)} ${p.unit}",fontSize=14.sp,fontWeight=FontWeight.Bold,color=if(p.qty<=0)Color.Red else Teal)}}}}};if(add)ProductDialog(db){add=false}}
-@Composable fun ProductDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var q by remember{mutableStateOf("")};var u by remember{mutableStateOf("حبة")};var w by remember{mutableStateOf("الرئيسي")};var cat by remember{mutableStateOf("عام")};AlertDialog(onDismissRequest=done,title={Text("إضافة صنف")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("اسم الصنف",n){n=it};Outlined("الكمية",q){q=it};Outlined("الوحدة",u){u=it};Outlined("المخزن",w){w=it};Outlined("الفئة",cat){cat=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveProduct(n,q.toDoubleOrNull()?:0.0,u,w,cat);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
+@Composable fun Inventory(db:AppDb){
+ var add by remember{mutableStateOf(false)};var edit by remember{mutableStateOf<Product?>(null)};var del by remember{mutableStateOf<Product?>(null)};val list=db.products()
+ Page("المخزون",Icons.Default.Inventory2){
+  Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة صنف")}
+  LazyColumn(Modifier.fillMaxWidth().weight(1f)){items(list){p->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+   Column(Modifier.weight(1f)){Text(p.name,fontWeight=FontWeight.Bold,color=Ink);Text(p.category+" • "+p.warehouse,fontSize=12.sp,color=Color.Gray);Text(fmt(p.qty)+" "+p.unit,fontWeight=FontWeight.Bold,color=if(p.qty<=5)Color.Red else Teal)}
+   IconButton(onClick={edit=p}){Icon(Icons.Default.Edit,"تعديل")};IconButton(onClick={del=p}){Icon(Icons.Default.Delete,"حذف")}
+  }}}}
+ }
+ if(add)ProductDialog(db,null){add=false};if(edit!=null)ProductDialog(db,edit){edit=null}
+ if(del!=null)AlertDialog(onDismissRequest={del=null},title={Text("حذف الصنف؟")},text={Text(del!!.name)},confirmButton={Button(onClick={db.deleteProduct(del!!.id);del=null}){Text("حذف")}},dismissButton={TextButton(onClick={del=null}){Text("إلغاء")}})
+}
+@Composable fun ProductDialog(db:AppDb,initial:Product?,done:()->Unit){
+ var n by remember{mutableStateOf(initial?.name?:"")};var q by remember{mutableStateOf(initial?.qty?.toString()?:"")};var u by remember{mutableStateOf(initial?.unit?:"حبة")};var w by remember{mutableStateOf(initial?.warehouse?:"الرئيسي")};var cat by remember{mutableStateOf(initial?.category?:"عام")}
+ AlertDialog(onDismissRequest=done,title={Text(if(initial==null)"إضافة صنف" else "تعديل صنف")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("اسم الصنف",n){n=it};Outlined("الكمية",q){q=it};Outlined("الوحدة",u){u=it};Outlined("المخزن",w){w=it};Outlined("الفئة",cat){cat=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){if(initial==null)db.saveProduct(n,q.toDoubleOrNull()?:0.0,u,w,cat) else db.updateProduct(initial.id,n,q.toDoubleOrNull()?:0.0,u,w,cat);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})
+}
 
 @Composable fun Appointments(db:AppDb){var add by remember{mutableStateOf(false)};val cs=db.customers();val list=db.appointments();Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${a.date} • ${a.time}",fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)}}}}};if(add)AppointmentDialog(db,cs){add=false}}
 @Composable fun AppointmentDialog(db:AppDb,cs:List<Customer>,done:()->Unit){
