@@ -34,24 +34,38 @@ data class Customer(val id:Long,val name:String,val phone:String,val balance:Dou
 data class Appointment(val id:Long,val customer:String,val date:String,val time:String,val reason:String,val status:String)
 data class Product(val id:Long,val name:String,val qty:Double,val unit:String,val warehouse:String,val category:String)
 
-class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,1){
+class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  override fun onCreate(db:SQLiteDatabase){
-  db.execSQL("CREATE TABLE customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT,balance REAL NOT NULL DEFAULT 0,currency TEXT NOT NULL DEFAULT 'ر.ي')")
-  db.execSQL("CREATE TABLE appointments(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_id INTEGER NOT NULL,date TEXT NOT NULL,time TEXT,reason TEXT,status TEXT NOT NULL DEFAULT 'upcoming')")
-  db.execSQL("CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,qty REAL NOT NULL DEFAULT 0,unit TEXT,warehouse TEXT,category TEXT)")
+  db.execSQL("CREATE TABLE customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT,address TEXT DEFAULT '',notes TEXT DEFAULT '',balance REAL NOT NULL DEFAULT 0,currency TEXT NOT NULL DEFAULT 'ر.ي')")
+  db.execSQL("CREATE TABLE appointments(id INTEGER PRIMARY KEY AUTOINCREMENT,customer_id INTEGER NOT NULL,date TEXT NOT NULL,time TEXT,reason TEXT,status TEXT NOT NULL DEFAULT 'upcoming',amount REAL NOT NULL DEFAULT 0,currency TEXT NOT NULL DEFAULT 'ر.ي',notes TEXT DEFAULT '')")
+  db.execSQL("CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,qty REAL NOT NULL DEFAULT 0,unit TEXT,warehouse TEXT,category TEXT,inventory_date TEXT DEFAULT '')")
   db.execSQL("CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT)")
+  db.execSQL("CREATE TABLE audit(id INTEGER PRIMARY KEY AUTOINCREMENT,action TEXT NOT NULL,details TEXT NOT NULL,date TEXT NOT NULL)")
  }
- override fun onUpgrade(db:SQLiteDatabase,o:Int,n:Int){}
- fun customers():List<Customer>{val r=mutableListOf<Customer>();readableDatabase.rawQuery("SELECT id,name,phone,balance,currency FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r+=Customer(c.getLong(0),c.getString(1),c.getString(2)?:"",c.getDouble(3),c.getString(4))};return r}
- fun saveCustomer(n:String,p:String,b:Double,cur:String){val v=ContentValues();v.put("name",n);v.put("phone",p);v.put("balance",b);v.put("currency",cur);writableDatabase.insert("customers",null,v)}
- fun appointments():List<Appointment>{val r=mutableListOf<Appointment>();readableDatabase.rawQuery("SELECT a.id,c.name,a.date,a.time,a.reason,a.status FROM appointments a JOIN customers c ON c.id=a.customer_id ORDER BY a.date,a.time",null).use{c->while(c.moveToNext())r+=Appointment(c.getLong(0),c.getString(1),c.getString(2),c.getString(3)?:"",c.getString(4)?:"",c.getString(5))};return r}
- fun saveAppointment(cid:Long,d:String,t:String,reason:String){val v=ContentValues();v.put("customer_id",cid);v.put("date",d);v.put("time",t);v.put("reason",reason);v.put("status","upcoming");writableDatabase.insert("appointments",null,v)}
+ override fun onUpgrade(db:SQLiteDatabase,o:Int,n:Int){
+  if(o<2){
+   addColumn(db,"customers","address","TEXT DEFAULT ''");addColumn(db,"customers","notes","TEXT DEFAULT ''")
+   addColumn(db,"appointments","amount","REAL NOT NULL DEFAULT 0");addColumn(db,"appointments","currency","TEXT NOT NULL DEFAULT 'ر.ي'");addColumn(db,"appointments","notes","TEXT DEFAULT ''")
+   addColumn(db,"products","inventory_date","TEXT DEFAULT ''")
+   db.execSQL("CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,action TEXT NOT NULL,details TEXT NOT NULL,date TEXT NOT NULL)")
+  }
+ }
+ private fun addColumn(db:SQLiteDatabase,t:String,c:String,type:String){try{db.execSQL("ALTER TABLE $t ADD COLUMN $c $type")}catch(_:Exception){}}
+ private fun audit(action:String,details:String){val v=ContentValues();v.put("action",action);v.put("details",details);v.put("date",now());writableDatabase.insert("audit",null,v)}
+ fun customers():List<Customer>{val r=mutableListOf<Customer>();readableDatabase.rawQuery("SELECT id,name,phone,balance,currency FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r+=Customer(c.getLong(0),c.getString(1),c.getString(2)?:"",c.getDouble(3),c.getString(4)?:"ر.ي")};return r}
+ fun saveCustomer(id:Long?,n:String,p:String,b:Double,cur:String){val v=ContentValues();v.put("name",n);v.put("phone",p);v.put("balance",b);v.put("currency",cur);if(id==null){writableDatabase.insert("customers",null,v);audit("إضافة عميل",n)}else{writableDatabase.update("customers",v,"id=?",arrayOf(id.toString()));audit("تعديل عميل",n)}}
+ fun deleteCustomer(id:Long){writableDatabase.delete("appointments","customer_id=?",arrayOf(id.toString()));writableDatabase.delete("customers","id=?",arrayOf(id.toString()));audit("حذف عميل",id.toString())}
+ fun appointments():List<Appointment>{val r=mutableListOf<Appointment>();readableDatabase.rawQuery("SELECT a.id,c.name,a.date,a.time,a.reason,a.status FROM appointments a JOIN customers c ON c.id=a.customer_id ORDER BY a.date,a.time",null).use{c->while(c.moveToNext())r+=Appointment(c.getLong(0),c.getString(1),c.getString(2),c.getString(3)?:"",c.getString(4)?:"",c.getString(5)?:"upcoming")};return r}
+ fun saveAppointment(cid:Long,d:String,t:String,reason:String){val v=ContentValues();v.put("customer_id",cid);v.put("date",d);v.put("time",t);v.put("reason",reason);v.put("status","upcoming");writableDatabase.insert("appointments",null,v);audit("إضافة موعد",reason)}
+ fun updateAppointmentStatus(id:Long,status:String){val v=ContentValues();v.put("status",status);writableDatabase.update("appointments",v,"id=?",arrayOf(id.toString()));audit("تغيير حالة موعد",status)}
+ fun deleteAppointment(id:Long){writableDatabase.delete("appointments","id=?",arrayOf(id.toString()));audit("حذف موعد",id.toString())}
  fun products():List<Product>{val r=mutableListOf<Product>();readableDatabase.rawQuery("SELECT id,name,qty,unit,warehouse,category FROM products ORDER BY name",null).use{c->while(c.moveToNext())r+=Product(c.getLong(0),c.getString(1),c.getDouble(2),c.getString(3)?:"حبة",c.getString(4)?:"الرئيسي",c.getString(5)?:"عام")};return r}
- fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v)}
+ fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v);audit("إضافة صنف",n)}
+ fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
  fun setting(k:String)=readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?",arrayOf(k)).use{if(it.moveToFirst())it.getString(0) else ""}
  fun saveSetting(k:String,v:String){val x=ContentValues();x.put("key",k);x.put("value",v);writableDatabase.insertWithOnConflict("settings",null,x,SQLiteDatabase.CONFLICT_REPLACE)}
+ fun audits():List<String>{val r=mutableListOf<String>();readableDatabase.rawQuery("SELECT date,action,details FROM audit ORDER BY id DESC LIMIT 50",null).use{c->while(c.moveToNext())r+=c.getString(0)+" • "+c.getString(1)+" • "+c.getString(2)};return r}
 }
-
 class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.onCreate(b);setContent{App(AppDb(this))}}}
 
 @Composable fun App(db:AppDb){
