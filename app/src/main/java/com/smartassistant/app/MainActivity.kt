@@ -219,7 +219,24 @@ fun Home(db:AppDb,go:(String)->Unit){
 @Composable fun ProductDialog(db:AppDb,done:()->Unit){var n by remember{mutableStateOf("")};var q by remember{mutableStateOf("")};var u by remember{mutableStateOf("حبة")};var w by remember{mutableStateOf("الرئيسي")};var cat by remember{mutableStateOf("عام")};AlertDialog(onDismissRequest=done,title={Text("إضافة صنف")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("اسم الصنف",n){n=it};Outlined("الكمية",q){q=it};Outlined("الوحدة",u){u=it};Outlined("المخزن",w){w=it};Outlined("الفئة",cat){cat=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){db.saveProduct(n,q.toDoubleOrNull()?:0.0,u,w,cat);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
 
 @Composable fun Appointments(db:AppDb){var add by remember{mutableStateOf(false)};val cs=db.customers();val list=db.appointments();Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${a.date} • ${a.time}",fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)}}}}};if(add)AppointmentDialog(db,cs){add=false}}
-@Composable fun AppointmentDialog(db:AppDb,cs:List<Customer>,done:()->Unit){var cid by remember{mutableStateOf(cs.firstOrNull()?.id?:0)};var d by remember{mutableStateOf("")};var t by remember{mutableStateOf("")};var r by remember{mutableStateOf("")};AlertDialog(onDismissRequest=done,title={Text("موعد جديد")},text={Column(Modifier.verticalScroll(rememberScrollState())){if(cs.isEmpty())Text("أضف عميلًا أولًا.");else{Outlined("رقم العميل",cid.toString()){cid=it.toLongOrNull()?:cid};Outlined("التاريخ",d){d=it};Outlined("الوقت",t){t=it};Outlined("سبب الموعد",r){r=it}}}},confirmButton={Button(onClick={if(cid>0&&d.isNotBlank()){db.saveAppointment(cid,d,t,r);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})}
+@Composable fun AppointmentDialog(db:AppDb,cs:List<Customer>,done:()->Unit){
+ val context=androidx.compose.ui.platform.LocalContext.current
+ var cid by remember{mutableStateOf(cs.firstOrNull()?.id?:0)};var search by remember{mutableStateOf("")};var d by remember{mutableStateOf("")};var t by remember{mutableStateOf("")};var r by remember{mutableStateOf("")}
+ val matches=cs.filter{it.name.contains(search,true)}.take(5)
+ AlertDialog(onDismissRequest=done,title={Text("موعد جديد")},text={Column(Modifier.verticalScroll(rememberScrollState())){
+  if(cs.isEmpty())Text("أضف عميلًا أولًا.") else {
+   Outlined("اكتب اسم العميل",search){search=it}
+   matches.forEach{c->TextButton(onClick={cid=c.id;search=c.name},modifier=Modifier.fillMaxWidth()){Text(c.name)}}
+   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+    Button(onClick={val cal=Calendar.getInstance();DatePickerDialog(context,{_,y,m,day->d=String.format(Locale.US,"%04d-%02d-%02d",y,m+1,day)},cal.get(Calendar.YEAR),cal.get(Calendar.MONTH),cal.get(Calendar.DAY_OF_MONTH)).show()},modifier=Modifier.weight(1f)){Text(if(d.isBlank())"اختيار التاريخ" else d)}
+    Button(onClick={val cal=Calendar.getInstance();TimePickerDialog(context,{_,h,m->t=String.format(Locale.US,"%02d:%02d",h,m)},cal.get(Calendar.HOUR_OF_DAY),cal.get(Calendar.MINUTE),true).show()},modifier=Modifier.weight(1f)){Text(if(t.isBlank())"اختيار الوقت" else t)}
+   }
+   Outlined("سبب الموعد",r){r=it}
+  }
+ }},confirmButton={Button(onClick={
+   if(cid>0&&d.isNotBlank()){db.saveAppointment(cid,d,t,r);val chosen=cs.find{it.id==cid};if(chosen!=null)scheduleReminder(context,db.appointments().lastOrNull()?.id?:0,chosen.name,d,t);done()}
+ }){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})
+}
 
 @Composable fun Reports(db:AppDb){val c=db.customers();val p=db.products();val a=db.appointments();Page("التقارير",Icons.Default.Assessment){R("إجمالي العملاء",c.size.toString());R("العملاء ذوو الأرصدة",c.count{it.balance!=0.0}.toString());R("إجمالي الأرصدة",fmt(c.sumOf{it.balance}));R("المواعيد",a.size.toString());R("الأصناف منخفضة المخزون",p.count{it.qty<=5}.toString())}}
 @Composable fun R(t:String,v:String)=Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween){Text(t,color=Ink);Text(v,fontWeight=FontWeight.Bold,color=Blue)}}
