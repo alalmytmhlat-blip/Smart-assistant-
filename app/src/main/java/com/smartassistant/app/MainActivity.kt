@@ -266,3 +266,18 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
 }
 @Composable fun Outlined(label:String,v:String,on:(String)->Unit)=OutlinedTextField(v,on,label={Text(label)},modifier=Modifier.fillMaxWidth().padding(vertical=3.dp),singleLine=true)
 fun fmt(v:Double)=String.format(Locale.US,"%,.0f",v)
+
+
+fun scheduleReminder(context:Context,id:Long,customer:String,date:String,time:String){
+ if(id<=0L)return
+ val at=runCatching{SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).parse(date+" "+time)!!.time}.getOrNull()?:return
+ if(at<=System.currentTimeMillis())return
+ val am=context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+ if(Build.VERSION.SDK_INT>=31&&!am.canScheduleExactAlarms())return
+ val intent=Intent(context,ReminderReceiver::class.java).apply{putExtra("customer",customer);putExtra("id",id)}
+ val pi=PendingIntent.getBroadcast(context,id.toInt(),intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+ am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi)
+}
+fun importPdfText(file:File):String{
+ PDDocument.load(file).use{doc->return org.apache.pdfbox.text.PDFTextStripper().getText(doc)}
+}
