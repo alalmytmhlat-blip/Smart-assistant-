@@ -10,6 +10,8 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.net.Uri
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -39,6 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.util.*
 
 private val Blue=Color(0xFF1769E0); private val Teal=Color(0xFF0BA6A6); private val Page=Color(0xFFF7F9FC); private val Ink=Color(0xFF17324D)
@@ -46,6 +51,9 @@ private val Blue=Color(0xFF1769E0); private val Teal=Color(0xFF0BA6A6); private 
 data class Customer(val id:Long,val name:String,val phone:String,val balance:Double,val currency:String)
 data class Appointment(val id:Long,val customer:String,val date:String,val time:String,val reason:String,val status:String)
 data class Product(val id:Long,val name:String,val qty:Double,val unit:String,val warehouse:String,val category:String)
+data class ImportedCustomer(val name:String,val phone:String,val balance:Double,val currency:String)
+data class ImportedProduct(val name:String,val qty:Double,val unit:String,val warehouse:String,val category:String)
+data class PdfImportResult(val added:Int,val updated:Int,val skipped:Int){ fun message(kind:String) = "$kind: تمت إضافة $added وتحديث $updated وتجاوز $skipped سجل." }
 
 class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  override fun onCreate(db:SQLiteDatabase){
@@ -78,6 +86,33 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v);audit("إضافة صنف",n)}
  fun updateProduct(id:Long,n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.update("products",v,"id=?",arrayOf(id.toString()));audit("تعديل صنف",n)}
 fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
+ fun importCustomers(rows:List<ImportedCustomer>):PdfImportResult{
+  var added=0;var updated=0;var skipped=0;val d=writableDatabase;d.beginTransaction()
+  try{
+   rows.forEach{row->
+    if(row.name.length<2){skipped++;return@forEach}
+    val phoneKey=normalizeKey(row.phone)
+    val existing=d.rawQuery("SELECT id FROM customers WHERE (?<>'' AND REPLACE(REPLACE(phone,' ',''),'-','')=?) OR lower(name)=lower(?) LIMIT 1",arrayOf(phoneKey,phoneKey,row.name)).use{if(it.moveToFirst())it.getLong(0) else 0L}
+    val v=ContentValues().apply{put("name",row.name);put("phone",row.phone);put("balance",row.balance);put("currency",row.currency)}
+    if(existing>0){d.update("customers",v,"id=?",arrayOf(existing.toString()));updated++}else{d.insert("customers",null,v);added++}
+   }
+   d.setTransactionSuccessful()
+  }finally{d.endTransaction()}
+  audit("استيراد عملاء من PDF","إضافة $added، تحديث $updated، تجاوز $skipped");return PdfImportResult(added,updated,skipped)
+ }
+ fun importProducts(rows:List<ImportedProduct>):PdfImportResult{
+  var added=0;var updated=0;var skipped=0;val d=writableDatabase;d.beginTransaction()
+  try{
+   rows.forEach{row->
+    if(row.name.length<2){skipped++;return@forEach}
+    val existing=d.rawQuery("SELECT id FROM products WHERE lower(trim(name))=lower(trim(?)) AND lower(COALESCE(warehouse,''))=lower(trim(?)) LIMIT 1",arrayOf(row.name,row.warehouse)).use{if(it.moveToFirst())it.getLong(0) else 0L}
+    val v=ContentValues().apply{put("name",row.name);put("qty",row.qty);put("unit",row.unit);put("warehouse",row.warehouse);put("category",row.category)}
+    if(existing>0){d.update("products",v,"id=?",arrayOf(existing.toString()));updated++}else{d.insert("products",null,v);added++}
+   }
+   d.setTransactionSuccessful()
+  }finally{d.endTransaction()}
+  audit("استيراد أصناف من PDF","إضافة $added، تحديث $updated، تجاوز $skipped");return PdfImportResult(added,updated,skipped)
+ }
  fun setting(k:String)=readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?",arrayOf(k)).use{if(it.moveToFirst())it.getString(0) else ""}
  fun backupJson():String{
   val root=JSONObject()
@@ -103,6 +138,7 @@ fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.
 class MainActivity:ComponentActivity(){
  override fun onCreate(b:Bundle?){
   super.onCreate(b)
+  PDFBoxResourceLoader.init(applicationContext)
   setContent{App(AppDb(this))}
   if(Build.VERSION.SDK_INT>=33)requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"),7001)
  }
@@ -221,10 +257,18 @@ fun Home(db:AppDb,go:(String)->Unit){
 
 @Composable fun Customers(db:AppDb){
  var q by remember{mutableStateOf("")};var add by remember{mutableStateOf(false)};var edit by remember{mutableStateOf<Customer?>(null)};var del by remember{mutableStateOf<Customer?>(null)}
+ var importMessage by remember{mutableStateOf("")};var importing by remember{mutableStateOf(false)}
+ val context=androidx.compose.ui.platform.LocalContext.current
+ val pdfLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null){importing=true;importMessage="جارٍ قراءة ملف PDF...";importPdfAsync(context,uri,{text->db.importCustomers(parseCustomersPdf(text))},{r->importing=false;importMessage=r.message("استيراد العملاء")},{e->importing=false;importMessage="فشل استيراد العملاء: "+(e.message?:"ملف PDF غير مدعوم")})}}
  val list=db.customers().filter{it.name.contains(q,true)||it.phone.contains(q)}
  Page("العملاء والأرصدة",Icons.Default.People){
   Outlined("بحث بالاسم أو الهاتف",q){q=it}
-  Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة عميل")}
+  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+   Button(onClick={add=true},modifier=Modifier.weight(1f)){Text("إضافة عميل")}
+   OutlinedButton(onClick={pdfLauncher.launch(arrayOf("application/pdf"))},modifier=Modifier.weight(1f)){Icon(Icons.Default.PictureAsPdf,null);Spacer(Modifier.width(4.dp));Text("استيراد PDF")}
+  }
+  if(importing)LinearProgressIndicator(Modifier.fillMaxWidth())
+  if(importMessage.isNotBlank())Text(importMessage,fontSize=12.sp,color=if(importMessage.startsWith("فشل"))Color.Red else Teal,modifier=Modifier.padding(vertical=4.dp))
   LazyColumn(Modifier.fillMaxWidth().weight(1f)){items(list){c->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
    Column(Modifier.weight(1f)){Text(c.name,fontWeight=FontWeight.Bold,color=Ink);Text(c.phone.ifBlank{"بدون رقم"},fontSize=12.sp,color=Color.Gray);Text("الرصيد: "+fmt(c.balance)+" "+c.currency,fontWeight=FontWeight.Bold,color=Blue)}
    IconButton(onClick={edit=c}){Icon(Icons.Default.Edit,"تعديل")};IconButton(onClick={del=c}){Icon(Icons.Default.Delete,"حذف")}
@@ -239,9 +283,17 @@ fun Home(db:AppDb,go:(String)->Unit){
 }
 
 @Composable fun Inventory(db:AppDb){
- var add by remember{mutableStateOf(false)};var edit by remember{mutableStateOf<Product?>(null)};var del by remember{mutableStateOf<Product?>(null)};val list=db.products()
+ var add by remember{mutableStateOf(false)};var edit by remember{mutableStateOf<Product?>(null)};var del by remember{mutableStateOf<Product?>(null)};var importMessage by remember{mutableStateOf("")};var importing by remember{mutableStateOf(false)}
+ val context=androidx.compose.ui.platform.LocalContext.current
+ val pdfLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null){importing=true;importMessage="جارٍ قراءة ملف PDF...";importPdfAsync(context,uri,{text->db.importProducts(parseProductsPdf(text))},{r->importing=false;importMessage=r.message("استيراد الأصناف")},{e->importing=false;importMessage="فشل استيراد الأصناف: "+(e.message?:"ملف PDF غير مدعوم")})}}
+ val list=db.products()
  Page("المخزون",Icons.Default.Inventory2){
-  Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("إضافة صنف")}
+  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+   Button(onClick={add=true},modifier=Modifier.weight(1f)){Text("إضافة صنف")}
+   OutlinedButton(onClick={pdfLauncher.launch(arrayOf("application/pdf"))},modifier=Modifier.weight(1f)){Icon(Icons.Default.PictureAsPdf,null);Spacer(Modifier.width(4.dp));Text("استيراد PDF")}
+  }
+  if(importing)LinearProgressIndicator(Modifier.fillMaxWidth())
+  if(importMessage.isNotBlank())Text(importMessage,fontSize=12.sp,color=if(importMessage.startsWith("فشل"))Color.Red else Teal,modifier=Modifier.padding(vertical=4.dp))
   LazyColumn(Modifier.fillMaxWidth().weight(1f)){items(list){p->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
    Column(Modifier.weight(1f)){Text(p.name,fontWeight=FontWeight.Bold,color=Ink);Text(p.category+" • "+p.warehouse,fontSize=12.sp,color=Color.Gray);Text(fmt(p.qty)+" "+p.unit,fontWeight=FontWeight.Bold,color=if(p.qty<=5)Color.Red else Teal)}
    IconButton(onClick={edit=p}){Icon(Icons.Default.Edit,"تعديل")};IconButton(onClick={del=p}){Icon(Icons.Default.Delete,"حذف")}
@@ -337,6 +389,56 @@ fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String
 @Composable fun Outlined(label:String,v:String,on:(String)->Unit)=OutlinedTextField(v,on,label={Text(label)},modifier=Modifier.fillMaxWidth().padding(vertical=3.dp),singleLine=true)
 fun fmt(v:Double)=String.format(Locale.US,"%,.0f",v)
 
+
+fun normalizeDigits(s:String):String = s.replace('٠','0').replace('١','1').replace('٢','2').replace('٣','3').replace('٤','4').replace('٥','5').replace('٦','6').replace('٧','7').replace('٨','8').replace('٩','9').replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9')
+fun normalizeKey(s:String)=normalizeDigits(s).lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"),"")
+fun parseNumber(s:String):Double?=runCatching{normalizeDigits(s).replace(",","").replace("٬","").replace("٫",".").replace(Regex("[^0-9.+-]"),"").toDouble()}.getOrNull()
+private val numberRegex=Regex("[-+]?\\d[\\d,]*(?:\\.\\d+)?")
+private val currencyRegex=Regex("(ر\\.ي|ر\\.س|ريال|ريالات|دولار|\\$|USD|SAR|YER)",RegexOption.IGNORE_CASE)
+private val units=setOf("حبة","حبه","قطعة","قطعه","كرتون","باكت","باكيت","كيس","رول","متر","سم","كيلو","كجم","جرام","لتر","جالون","دبة","طقم","علبة","صندوق","بكرة")
+private fun cleanLine(raw:String)=normalizeDigits(raw).replace(Regex("\\s+")," ").trim()
+private fun isHeader(line:String):Boolean{val l=line.lowercase();return l.contains("اسم العميل")||l.contains("اسم الصنف")||l.contains("رقم العميل")||l.contains("الهاتف")||l.contains("الرصيد")||l.contains("الكمية")||l.contains("الوحدة")||l.contains("الاجمالي")||l.contains("المخزن")}
+fun parseCustomersPdf(text:String):List<ImportedCustomer>{
+ val out=mutableListOf<ImportedCustomer>()
+ text.lines().map(::cleanLine).filter{it.length>=2&&!isHeader(it)}.forEach{line->
+  val tokens=line.split(" ").toMutableList()
+  val phoneIndex=tokens.indexOfFirst{Regex("^\\+?\\d{7,15}$").matches(it.replace("-",""))}
+  val phone=if(phoneIndex>=0)tokens.removeAt(phoneIndex).replace("-","") else ""
+  val nums=numberRegex.findAll(tokens.joinToString(" ")).toList();val amountMatch=nums.lastOrNull();val amount=amountMatch?.value?.let(::parseNumber)?:0.0
+  if(amountMatch!=null){val idx=tokens.indexOfFirst{it.contains(amountMatch.value)};if(idx>=0)tokens.removeAt(idx)}
+  if(tokens.firstOrNull()?.matches(Regex("\\d{1,6}"))==true)tokens.removeAt(0)
+  val currency=tokens.firstOrNull{currencyRegex.containsMatchIn(it)}?:"ر.ي";tokens.removeAll{currencyRegex.containsMatchIn(it)}
+  val name=tokens.joinToString(" ").trim().replace(Regex("\\s+")," ")
+  if(name.length>=2&&name.any{it.isLetter()})out+=ImportedCustomer(name,phone,amount,currency)
+ }
+ return out.distinctBy{normalizeKey(it.phone).ifBlank{normalizeKey(it.name)}}
+}
+fun parseProductsPdf(text:String):List<ImportedProduct>{
+ val out=mutableListOf<ImportedProduct>()
+ text.lines().map(::cleanLine).filter{it.length>=2&&!isHeader(it)}.forEach{line->
+  val tokens=line.split(" ").toMutableList();if(tokens.firstOrNull()?.matches(Regex("\\d{1,6}"))==true)tokens.removeAt(0)
+  var qtyIndex=-1
+  for(i in 0 until tokens.size-1){val next=tokens[i+1].lowercase().replace("،","").replace(".","");if(numberRegex.matches(tokens[i])&&units.contains(next)){qtyIndex=i;break}}
+  if(qtyIndex<0){val last=numberRegex.findAll(tokens.joinToString(" ")).lastOrNull();if(last!=null){val idx=tokens.indexOfFirst{it.contains(last.value)};if(idx>=0)qtyIndex=idx}}
+  if(qtyIndex<0)return@forEach
+  val qty=parseNumber(tokens[qtyIndex])?:return@forEach
+  val unit=if(qtyIndex+1<tokens.size&&units.contains(tokens[qtyIndex+1].lowercase().replace("،","")))tokens[qtyIndex+1] else "حبة"
+  if(qtyIndex+1<tokens.size&&units.contains(tokens[qtyIndex+1].lowercase().replace("،","")))tokens.removeAt(qtyIndex+1)
+  tokens.removeAt(qtyIndex)
+  val warehouse=tokens.firstOrNull{it.equals("الرئيسي",true)}?:"الرئيسي";val category=tokens.firstOrNull{it.equals("سباكة",true)||it.equals("كهرباء",true)||it.equals("حبال",true)||it.equals("أدوات",true)}?:"عام"
+  val name=tokens.joinToString(" ").replace(Regex("\\s+")," ").trim().trim('-','|',':')
+  if(name.length>=2&&name.any{it.isLetter()})out+=ImportedProduct(name,qty,unit,warehouse,category)
+ }
+ return out.distinctBy{normalizeKey(it.name)+"|"+normalizeKey(it.warehouse)}
+}
+fun extractPdfText(context:Context,uri:Uri):String{
+ context.contentResolver.openInputStream(uri)?.use{input->PDDocument.load(input).use{doc->
+  val stripper=PDFTextStripper().apply{setSortByPosition(true);setWordSeparator(" ");setLineSeparator("\n")};return stripper.getText(doc)
+ }}?:throw IllegalArgumentException("تعذر فتح ملف PDF")
+}
+fun importPdfAsync(context:Context,uri:Uri,parse:(String)->PdfImportResult,onSuccess:(PdfImportResult)->Unit,onError:(Exception)->Unit){
+ Thread{try{val result=parse(extractPdfText(context,uri));Handler(Looper.getMainLooper()).post{onSuccess(result)}}catch(e:Exception){Handler(Looper.getMainLooper()).post{onError(e)}}}.start()
+}
 
 fun scheduleAllReminders(context:Context,db:AppDb){
  db.appointments().forEach{a->scheduleReminder(context,a.id,a.customer,a.date,a.time)}
