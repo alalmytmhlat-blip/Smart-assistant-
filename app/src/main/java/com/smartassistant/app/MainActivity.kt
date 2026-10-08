@@ -250,7 +250,15 @@ fun Home(db:AppDb,go:(String)->Unit){
  AlertDialog(onDismissRequest=done,title={Text(if(initial==null)"إضافة صنف" else "تعديل صنف")},text={Column(Modifier.verticalScroll(rememberScrollState())){Outlined("اسم الصنف",n){n=it};Outlined("الكمية",q){q=it};Outlined("الوحدة",u){u=it};Outlined("المخزن",w){w=it};Outlined("الفئة",cat){cat=it}}},confirmButton={Button(onClick={if(n.isNotBlank()){if(initial==null)db.saveProduct(n,q.toDoubleOrNull()?:0.0,u,w,cat) else db.updateProduct(initial.id,n,q.toDoubleOrNull()?:0.0,u,w,cat);done()}}){Text("حفظ")}},dismissButton={TextButton(onClick=done){Text("إلغاء")}})
 }
 
-@Composable fun Appointments(db:AppDb){var add by remember{mutableStateOf(false)};val cs=db.customers();val list=db.appointments();Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")};LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text("${a.date} • ${a.time}",fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)}}}}};if(add)AppointmentDialog(db,cs){add=false}}
+@Composable fun Appointments(db:AppDb){
+ var add by remember{mutableStateOf(false)};var del by remember{mutableStateOf<Appointment?>(null)};val cs=db.customers();val list=db.appointments()
+ Page("الاستحقاقات والمتابعة",Icons.Default.EventNote){
+  Button(onClick={add=true},modifier=Modifier.fillMaxWidth()){Text("موعد جديد")}
+  LazyColumn(Modifier.fillMaxWidth().weight(1f),contentPadding=PaddingValues(vertical=4.dp)){items(list){a->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text(a.customer,fontSize=16.sp,fontWeight=FontWeight.Bold,color=Ink);Text(a.date+" • "+a.time,fontSize=13.sp,color=Blue);Text(a.reason,fontSize=13.sp,color=Color.Gray)};IconButton(onClick={db.updateAppointmentStatus(a.id,if(a.status=="done")"upcoming" else "done")}){Icon(if(a.status=="done")Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,"حالة الموعد")};IconButton(onClick={del=a}){Icon(Icons.Default.Delete,"حذف")}}}}}
+ }
+ if(add)AppointmentDialog(db,cs){add=false}
+ if(del!=null)AlertDialog(onDismissRequest={del=null},title={Text("حذف الموعد؟")},text={Text(del!!.customer)},confirmButton={Button(onClick={db.deleteAppointment(del!!.id);del=null}){Text("حذف")}},dismissButton={TextButton(onClick={del=null}){Text("إلغاء")}})
+}
 @Composable fun AppointmentDialog(db:AppDb,cs:List<Customer>,done:()->Unit){
  val context=androidx.compose.ui.platform.LocalContext.current
  var cid by remember{mutableStateOf(cs.firstOrNull()?.id?:0)};var search by remember{mutableStateOf("")};var d by remember{mutableStateOf("")};var t by remember{mutableStateOf("")};var r by remember{mutableStateOf("")}
