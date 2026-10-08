@@ -113,7 +113,7 @@ class MainActivity:ComponentActivity(){override fun onCreate(b:Bundle?){super.on
   }
  }){p->Box(Modifier.fillMaxSize().padding(p)){when(tab){
   "home"->Home(db){tab=it};"assistant"->Assistant(db);"alerts"->Appointments(db);"settings"->Settings(db)
-  "customers"->Customers(db);"inventory"->Inventory(db);"reports"->Reports(db);"messages"->Messages()
+  "customers"->Customers(db);"inventory"->Inventory(db);"reports"->Reports(db);"messages"->Messages(db); "audit"->Audit(db)
   else->Home(db){tab=it}
  }}}
 }
@@ -173,7 +173,8 @@ fun Home(db:AppDb,go:(String)->Unit){
      "alerts" to ("الاستحقاقات" to Icons.Default.EventNote),
      "inventory" to ("المخزون" to Icons.Default.Inventory2),
      "reports" to ("التقارير" to Icons.Default.Assessment),
-     "messages" to ("الرسائل" to Icons.Default.Message)
+     "messages" to ("الرسائل" to Icons.Default.Message),
+     "audit" to ("سجل العمليات" to Icons.Default.History)
     )
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
      cards.chunked(columns).forEach{row->
@@ -203,7 +204,15 @@ fun Home(db:AppDb,go:(String)->Unit){
 
 @Composable fun Reports(db:AppDb){val c=db.customers();val p=db.products();val a=db.appointments();Page("التقارير",Icons.Default.Assessment){R("إجمالي العملاء",c.size.toString());R("العملاء ذوو الأرصدة",c.count{it.balance!=0.0}.toString());R("إجمالي الأرصدة",fmt(c.sumOf{it.balance}));R("المواعيد",a.size.toString());R("الأصناف منخفضة المخزون",p.count{it.qty<=5}.toString())}}
 @Composable fun R(t:String,v:String)=Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween){Text(t,color=Ink);Text(v,fontWeight=FontWeight.Bold,color=Blue)}}
-@Composable fun Messages()=Page("الرسائل",Icons.Default.Message){listOf("نذكركم بموعدكم المحدد.","نذكركم بمتابعة الاستحقاق.","مرحبًا، نود الاطمئنان والمتابعة معكم.").forEach{Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Text(it,Modifier.padding(16.dp),color=Ink)}}}
+@Composable fun Messages(db:AppDb){
+ val context=androidx.compose.ui.platform.LocalContext.current
+ val templates=listOf("نذكركم بموعدكم المحدد.","نذكركم بمتابعة الاستحقاق.","مرحبًا، نود الاطمئنان والمتابعة معكم.")
+ Page("الرسائل",Icons.Default.Message){
+  templates.forEach{msg->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(msg,color=Ink);Spacer(Modifier.height(8.dp));Button(onClick={val i=android.content.Intent(android.content.Intent.ACTION_VIEW,Uri.parse("https://wa.me/?text="+Uri.encode(msg)));context.startActivity(i)},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Send,null);Spacer(Modifier.width(6.dp));Text("فتح واتساب بالرسالة")}}}}
+ }
+}
+@Composable fun Audit(db:AppDb){val logs=db.audits();Page("سجل العمليات",Icons.Default.History){if(logs.isEmpty())Text("لا توجد عمليات مسجلة.",color=Color.Gray) else LazyColumn{items(logs){Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Text(it,Modifier.padding(12.dp),fontSize=12.sp,color=Ink)}}}}}
+
 
 @Composable fun Assistant(db:AppDb){var q by remember{mutableStateOf("")};var a by remember{mutableStateOf("اسألني عن بيانات التطبيق الفعلية.")};val c=db.customers();val p=db.products();val ap=db.appointments();Page("المساعد الذكي",Icons.Default.AutoAwesome){Text("اسأل بلغة طبيعية",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink);Outlined("اكتب سؤالك",q){q=it};Button(onClick={a=answer(q,c,p,ap)},modifier=Modifier.fillMaxWidth()){Text("تحليل البيانات")};Card(Modifier.fillMaxWidth().padding(top=12.dp)){Text(a,Modifier.padding(16.dp),color=Ink)}}}
 fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String=when{q.contains("عدد")&&q.contains("عمل") -> "عدد العملاء: ${c.size}";q.contains("رصيد")||q.contains("أرصدة")->"عملاء بأرصدة: ${c.count{it.balance!=0.0}}\\nإجمالي الأرصدة: ${fmt(c.sumOf{it.balance})}";q.contains("مخزون")||q.contains("أصناف")->"الأصناف: ${p.size}\\nالمنخفضة أو النافدة: ${p.count{it.qty<=5}}";q.contains("موعد")||q.contains("اليوم")->"المواعيد المسجلة: ${a.size}";else->"لم أفهم السؤال. جرّب: كم عدد العملاء؟ أو كم إجمالي الأرصدة؟ أو ما الأصناف التي قاربت على النفاد؟"}
