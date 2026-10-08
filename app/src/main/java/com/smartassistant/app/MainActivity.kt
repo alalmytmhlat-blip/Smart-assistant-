@@ -5,6 +5,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.Bundle
+import android.content.Intent
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.net.Uri
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -112,6 +115,7 @@ class ReminderReceiver:android.content.BroadcastReceiver(){
   val customer=intent.getStringExtra("customer")?:"العميل"
   val n=androidx.core.app.NotificationCompat.Builder(context,channel).setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("تذكير بالموعد").setContentText("موعد "+customer+" حان الآن").setAutoCancel(true).build()
   nm.notify(intent.getLongExtra("id",1).toInt(),n)
+ }
 }
 
 @Composable fun App(db:AppDb){
@@ -256,8 +260,8 @@ fun Home(db:AppDb,go:(String)->Unit){
    Outlined("اكتب اسم العميل",search){search=it}
    matches.forEach{c->TextButton(onClick={cid=c.id;search=c.name},modifier=Modifier.fillMaxWidth()){Text(c.name)}}
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-    Button(onClick={val cal=Calendar.getInstance();DatePickerDialog(context,{_,y,m,day->d=String.format(Locale.US,"%04d-%02d-%02d",y,m+1,day)},cal.get(Calendar.YEAR),cal.get(Calendar.MONTH),cal.get(Calendar.DAY_OF_MONTH)).show()},modifier=Modifier.weight(1f)){Text(if(d.isBlank())"اختيار التاريخ" else d)}
-    Button(onClick={val cal=Calendar.getInstance();TimePickerDialog(context,{_,h,m->t=String.format(Locale.US,"%02d:%02d",h,m)},cal.get(Calendar.HOUR_OF_DAY),cal.get(Calendar.MINUTE),true).show()},modifier=Modifier.weight(1f)){Text(if(t.isBlank())"اختيار الوقت" else t)}
+    Button(onClick={val cal=Calendar.getInstance();android.app.DatePickerDialog(context,{_,y,m,day->d=String.format(Locale.US,"%04d-%02d-%02d",y,m+1,day)},cal.get(Calendar.YEAR),cal.get(Calendar.MONTH),cal.get(Calendar.DAY_OF_MONTH)).show()},modifier=Modifier.weight(1f)){Text(if(d.isBlank())"اختيار التاريخ" else d)}
+    Button(onClick={val cal=Calendar.getInstance();android.app.TimePickerDialog(context,{_,h,m->t=String.format(Locale.US,"%02d:%02d",h,m)},cal.get(Calendar.HOUR_OF_DAY),cal.get(Calendar.MINUTE),true).show()},modifier=Modifier.weight(1f)){Text(if(t.isBlank())"اختيار الوقت" else t)}
    }
    Outlined("سبب الموعد",r){r=it}
   }
