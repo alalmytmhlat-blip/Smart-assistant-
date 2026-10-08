@@ -274,9 +274,17 @@ fun Home(db:AppDb,go:(String)->Unit){
 @Composable fun R(t:String,v:String)=Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween){Text(t,color=Ink);Text(v,fontWeight=FontWeight.Bold,color=Blue)}}
 @Composable fun Messages(db:AppDb){
  val context=androidx.compose.ui.platform.LocalContext.current
+ val cs=db.customers();var q by remember{mutableStateOf("")};var selected by remember{mutableStateOf<Customer?>(null)}
  val templates=listOf("نذكركم بموعدكم المحدد.","نذكركم بمتابعة الاستحقاق.","مرحبًا، نود الاطمئنان والمتابعة معكم.")
  Page("الرسائل",Icons.Default.Message){
-  templates.forEach{msg->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(msg,color=Ink);Spacer(Modifier.height(8.dp));Button(onClick={val i=android.content.Intent(android.content.Intent.ACTION_VIEW,Uri.parse("https://wa.me/?text="+Uri.encode(msg)));context.startActivity(i)},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Send,null);Spacer(Modifier.width(6.dp));Text("فتح واتساب بالرسالة")}}}}
+  Outlined("اكتب اسم العميل",q){q=it}
+  cs.filter{it.name.contains(q,true)}.take(5).forEach{c->TextButton(onClick={selected=c;q=c.name},modifier=Modifier.fillMaxWidth()){Text(c.name)}}
+  if(selected!=null)Text("العميل المحدد: "+selected!!.name+" • "+selected!!.phone,fontSize=12.sp,color=Teal)
+  templates.forEach{msg->Card(Modifier.fillMaxWidth().padding(vertical=4.dp)){Column(Modifier.padding(14.dp)){Text(msg,color=Ink);Spacer(Modifier.height(8.dp));Button(onClick={
+   val phone=selected?.phone?.filter{it.isDigit()}?:""
+   val url=if(phone.isBlank())"https://wa.me/?text="+Uri.encode(msg) else "https://wa.me/"+phone+"?text="+Uri.encode(msg)
+   context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))
+  },modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Send,null);Spacer(Modifier.width(6.dp));Text(if(selected==null)"فتح واتساب بالرسالة" else "إرسال للعميل المحدد")}}}}
  }
 }
 @Composable fun Audit(db:AppDb){val logs=db.audits();Page("سجل العمليات",Icons.Default.History){if(logs.isEmpty())Text("لا توجد عمليات مسجلة.",color=Color.Gray) else LazyColumn{items(logs){Card(Modifier.fillMaxWidth().padding(vertical=3.dp)){Text(it,Modifier.padding(12.dp),fontSize=12.sp,color=Ink)}}}}}
