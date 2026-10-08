@@ -13,9 +13,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import org.json.JSONArray
 import org.json.JSONObject
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import java.io.File
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -103,7 +100,6 @@ fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.
 class MainActivity:ComponentActivity(){
  override fun onCreate(b:Bundle?){
   super.onCreate(b)
-  PDFBoxResourceLoader.init(applicationContext)
   setContent{App(AppDb(this))}
   if(Build.VERSION.SDK_INT>=33)requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"),7001)
  }
@@ -327,6 +323,4 @@ fun scheduleReminder(context:Context,id:Long,customer:String,date:String,time:St
  val pi=PendingIntent.getBroadcast(context,id.toInt(),intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
  am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi)
 }
-fun importPdfText(file:File):String{
- PDDocument.load(file).use{doc->return org.apache.pdfbox.text.PDFTextStripper().getText(doc)}
-}
+
