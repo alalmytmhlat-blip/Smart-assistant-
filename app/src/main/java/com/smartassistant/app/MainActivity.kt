@@ -5,6 +5,14 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.Bundle
+import android.net.Uri
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -66,6 +74,24 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v);audit("إضافة صنف",n)}
  fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
  fun setting(k:String)=readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?",arrayOf(k)).use{if(it.moveToFirst())it.getString(0) else ""}
+ fun backupJson():String{
+  val root=JSONObject()
+  arrayOf("customers","appointments","products","settings").forEach{t->
+   val arr=JSONArray()
+   readableDatabase.rawQuery("SELECT * FROM $t",null).use{c->while(c.moveToNext()){
+    val o=JSONObject();for(i in 0 until c.columnCount){if(c.isNull(i))o.put(c.getColumnName(i),JSONObject.NULL) else when(c.getType(i)){1->o.put(c.getColumnName(i),c.getLong(i));2->o.put(c.getColumnName(i),c.getDouble(i));else->o.put(c.getColumnName(i),c.getString(i))}};arr.put(o)
+   }};root.put(t,arr)
+  };return root.toString()
+ }
+ fun restoreJson(json:String){
+  val root=JSONObject(json);val d=writableDatabase;d.beginTransaction()
+  try{
+   arrayOf("appointments","customers","products","settings","audit").forEach{d.delete(it,null,null)}
+   fun restoreTable(t:String){if(!root.has(t))return;val a=root.getJSONArray(t);for(i in 0 until a.length()){val o=a.getJSONObject(i);val v=ContentValues();val it=o.keys();while(it.hasNext()){val k=it.next();if(k!="id"&&!o.isNull(k))v.put(k,o.get(k).toString())};d.insert(t,null,v)}}
+   restoreTable("customers");restoreTable("appointments");restoreTable("products");restoreTable("settings");d.setTransactionSuccessful()
+  }finally{d.endTransaction()}
+  audit("استعادة نسخة احتياطية","تمت استعادة البيانات")
+ }
  fun saveSetting(k:String,v:String){val x=ContentValues();x.put("key",k);x.put("value",v);writableDatabase.insertWithOnConflict("settings",null,x,SQLiteDatabase.CONFLICT_REPLACE)}
  fun audits():List<String>{val r=mutableListOf<String>();readableDatabase.rawQuery("SELECT date,action,details FROM audit ORDER BY id DESC LIMIT 50",null).use{c->while(c.moveToNext())r+=c.getString(0)+" • "+c.getString(1)+" • "+c.getString(2)};return r}
 }
@@ -182,7 +208,22 @@ fun Home(db:AppDb,go:(String)->Unit){
 @Composable fun Assistant(db:AppDb){var q by remember{mutableStateOf("")};var a by remember{mutableStateOf("اسألني عن بيانات التطبيق الفعلية.")};val c=db.customers();val p=db.products();val ap=db.appointments();Page("المساعد الذكي",Icons.Default.AutoAwesome){Text("اسأل بلغة طبيعية",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink);Outlined("اكتب سؤالك",q){q=it};Button(onClick={a=answer(q,c,p,ap)},modifier=Modifier.fillMaxWidth()){Text("تحليل البيانات")};Card(Modifier.fillMaxWidth().padding(top=12.dp)){Text(a,Modifier.padding(16.dp),color=Ink)}}}
 fun answer(q:String,c:List<Customer>,p:List<Product>,a:List<Appointment>):String=when{q.contains("عدد")&&q.contains("عمل") -> "عدد العملاء: ${c.size}";q.contains("رصيد")||q.contains("أرصدة")->"عملاء بأرصدة: ${c.count{it.balance!=0.0}}\\nإجمالي الأرصدة: ${fmt(c.sumOf{it.balance})}";q.contains("مخزون")||q.contains("أصناف")->"الأصناف: ${p.size}\\nالمنخفضة أو النافدة: ${p.count{it.qty<=5}}";q.contains("موعد")||q.contains("اليوم")->"المواعيد المسجلة: ${a.size}";else->"لم أفهم السؤال. جرّب: كم عدد العملاء؟ أو كم إجمالي الأرصدة؟ أو ما الأصناف التي قاربت على النفاد؟"}
 
-@Composable fun Settings(db:AppDb){var n by remember{mutableStateOf(db.setting("name"))};var ph by remember{mutableStateOf(db.setting("phone"))};var ok by remember{mutableStateOf(false)};Page("الإعدادات",Icons.Default.Settings){Outlined("اسم المنشأة",n){n=it};Outlined("الهاتف",ph){ph=it};Button(onClick={db.saveSetting("name",n);db.saveSetting("phone",ph);ok=true},modifier=Modifier.fillMaxWidth()){Text("حفظ")};if(ok)Text("تم حفظ الإعدادات.",color=Teal);Spacer(Modifier.height(16.dp));Text("البيانات محفوظة محليًا على الجهاز.",fontSize=12.sp,color=Color.Gray)}}
+@Composable fun Settings(db:AppDb){
+ var n by remember{mutableStateOf(db.setting("name"))};var ph by remember{mutableStateOf(db.setting("phone"))};var addr by remember{mutableStateOf(db.setting("address"))};var ok by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")};var logo by remember{mutableStateOf(db.setting("logo_uri"))}
+ val context=androidx.compose.ui.platform.LocalContext.current
+ val saveLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")){uri:Uri?->if(uri!=null)try{context.contentResolver.openOutputStream(uri)?.use{it.write(db.backupJson().toByteArray(Charsets.UTF_8))};msg="تم إنشاء النسخة الاحتياطية"}catch(_:Exception){msg="تعذر إنشاء النسخة"}}
+ val restoreLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null)try{context.contentResolver.openInputStream(uri)?.use{db.restoreJson(it.readBytes().toString(Charsets.UTF_8))};msg="تمت الاستعادة بنجاح"}catch(_:Exception){msg="ملف النسخة غير صالح"}}
+ val logoLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null){try{context.contentResolver.takePersistableUriPermission(uri,android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){};logo=uri.toString();db.saveSetting("logo_uri",logo);msg="تم حفظ الشعار"}}
+ val bitmap=remember(logo){if(logo.isBlank())null else try{context.contentResolver.openInputStream(Uri.parse(logo)).use{BitmapFactory.decodeStream(it)}?.asImageBitmap()}catch(_:Exception){null}}
+ Page("الإعدادات",Icons.Default.Settings){
+  if(bitmap!=null)Image(bitmap,"الشعار",Modifier.size(96.dp).align(Alignment.CenterHorizontally)) else Icon(Icons.Default.Business,null,tint=Blue,modifier=Modifier.size(72.dp).align(Alignment.CenterHorizontally))
+  Outlined("اسم المنشأة",n){n=it};Outlined("الهاتف",ph){ph=it};Outlined("العنوان",addr){addr=it}
+  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(onClick={logoLauncher.launch(arrayOf("image/*"))},modifier=Modifier.weight(1f)){Text("اختيار الشعار")};Button(onClick={db.saveSetting("name",n);db.saveSetting("phone",ph);db.saveSetting("address",addr);ok=true},modifier=Modifier.weight(1f)){Text("حفظ")}}
+  Spacer(Modifier.height(8.dp));Button(onClick={saveLauncher.launch("smart-assistant-backup.json")},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Backup,null);Spacer(Modifier.width(6.dp));Text("إنشاء نسخة احتياطية")}
+  OutlinedButton(onClick={restoreLauncher.launch(arrayOf("application/json","text/*"))},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Restore,null);Spacer(Modifier.width(6.dp));Text("استعادة / استيراد نسخة")}
+  if(ok)Text("تم حفظ معلومات المنشأة.",color=Teal);if(msg.isNotBlank())Text(msg,color=if(msg.contains("غير صالح")||msg.contains("تعذر"))Color.Red else Teal,fontSize=13.sp)
+  Spacer(Modifier.height(8.dp));Text("البيانات محفوظة محليًا على الجهاز.",fontSize=12.sp,color=Color.Gray)
+ }}
 
 @Composable fun Page(title:String,icon:ImageVector,content:@Composable ColumnScope.()->Unit){
  val screenWidth=android.content.res.Resources.getSystem().displayMetrics.widthPixels
