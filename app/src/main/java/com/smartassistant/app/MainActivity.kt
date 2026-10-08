@@ -62,7 +62,6 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
  fun updateAppointmentStatus(id:Long,status:String){val v=ContentValues();v.put("status",status);writableDatabase.update("appointments",v,"id=?",arrayOf(id.toString()));audit("تغيير حالة موعد",status)}
  fun products():List<Product>{val r=mutableListOf<Product>();readableDatabase.rawQuery("SELECT id,name,qty,unit,warehouse,category FROM products ORDER BY name",null).use{c->while(c.moveToNext())r+=Product(c.getLong(0),c.getString(1),c.getDouble(2),c.getString(3)?:"حبة",c.getString(4)?:"الرئيسي",c.getString(5)?:"عام")};return r}
  fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){val v=ContentValues();v.put("name",n);v.put("qty",q);v.put("unit",u);v.put("warehouse",w);v.put("category",cat);writableDatabase.insert("products",null,v);audit("إضافة صنف",n)}
- fun saveProduct(n:String,q:Double,u:String,w:String,cat:String){saveProduct(n,q,u,w,cat)}
  fun deleteProduct(id:Long){writableDatabase.delete("products","id=?",arrayOf(id.toString()));audit("حذف صنف",id.toString())}
  fun setting(k:String)=readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?",arrayOf(k)).use{if(it.moveToFirst())it.getString(0) else ""}
  fun saveSetting(k:String,v:String){val x=ContentValues();x.put("key",k);x.put("value",v);writableDatabase.insertWithOnConflict("settings",null,x,SQLiteDatabase.CONFLICT_REPLACE)}
