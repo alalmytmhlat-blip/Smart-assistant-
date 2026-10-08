@@ -51,6 +51,7 @@ class AppDb(c:Context):SQLiteOpenHelper(c,"smart_assistant.db",null,2){
   }
  }
  private fun addColumn(db:SQLiteDatabase,t:String,c:String,type:String){try{db.execSQL("ALTER TABLE $t ADD COLUMN $c $type")}catch(_:Exception){}}
+ private fun now():String=SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(Date())
  private fun audit(action:String,details:String){val v=ContentValues();v.put("action",action);v.put("details",details);v.put("date",now());writableDatabase.insert("audit",null,v)}
  fun customers():List<Customer>{val r=mutableListOf<Customer>();readableDatabase.rawQuery("SELECT id,name,phone,balance,currency FROM customers ORDER BY name",null).use{c->while(c.moveToNext())r+=Customer(c.getLong(0),c.getString(1),c.getString(2)?:"",c.getDouble(3),c.getString(4)?:"ر.ي")};return r}
  fun saveCustomer(id:Long?,n:String,p:String,b:Double,cur:String){val v=ContentValues();v.put("name",n);v.put("phone",p);v.put("balance",b);v.put("currency",cur);if(id==null){writableDatabase.insert("customers",null,v);audit("إضافة عميل",n)}else{writableDatabase.update("customers",v,"id=?",arrayOf(id.toString()));audit("تعديل عميل",n)}}
